@@ -12,7 +12,7 @@ import (
 )
 
 type UserService interface {
-	All(ctx context.Context) (*[]User, error)
+	All(ctx context.Context) ([]User, error)
 	Load(ctx context.Context, id string) (*User, error)
 	Insert(ctx context.Context, user *User) (int64, error)
 	Update(ctx context.Context, user *User) (int64, error)
@@ -24,24 +24,23 @@ type SqlUserService struct {
 	DB *sql.DB
 }
 
-func NewUserService(db *sql.DB) *SqlUserService {
+func NewUserService(db *sql.DB) UserService {
 	return &SqlUserService{DB: db}
 }
 
-
-func (m *SqlUserService) All(ctx context.Context) (*[]User, error) {
+func (m *SqlUserService) All(ctx context.Context) ([]User, error) {
 	query := "select id, username, email, phone, date_of_birth from users"
 	rows, err := m.DB.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	var result []User
+	var users []User
 	for rows.Next() {
 		var user User
 		err = rows.Scan(&user.Id, &user.Username, &user.Phone, &user.Email, &user.DateOfBirth)
-		result = append(result, user)
+		users = append(users, user)
 	}
-	return &result, nil
+	return users, nil
 }
 
 func (m *SqlUserService) Load(ctx context.Context, id string) (*User, error) {

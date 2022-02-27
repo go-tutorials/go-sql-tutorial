@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"reflect"
 
+	. "go-service/internal/filter"
 	. "go-service/internal/model"
 	. "go-service/internal/service"
 )
@@ -25,7 +26,7 @@ func (h *UserHandler) All(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	respond(w, result)
+	JSON(w, result)
 }
 
 func (h *UserHandler) Load(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +41,7 @@ func (h *UserHandler) Load(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	respond(w, result)
+	JSON(w, result)
 }
 
 func (h *UserHandler) Insert(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +58,7 @@ func (h *UserHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, er1.Error(), http.StatusInternalServerError)
 		return
 	}
-	respond(w, result)
+	JSON(w, result)
 }
 
 func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +86,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, er2.Error(), http.StatusInternalServerError)
 		return
 	}
-	respond(w, result)
+	JSON(w, result)
 }
 
 func (h *UserHandler) Patch(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +119,7 @@ func (h *UserHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, er2.Error(), http.StatusInternalServerError)
 		return
 	}
-	respond(w, result)
+	JSON(w, result)
 }
 
 func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -132,10 +133,25 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	respond(w, result)
+	JSON(w, result)
 }
 
-func respond(w http.ResponseWriter, result interface{}) {
+func (h *UserHandler) Search(w http.ResponseWriter, r *http.Request) {
+	var filter UserFilter
+	err := json.NewDecoder(r.Body).Decode(&filter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	res, err := h.service.Search(r.Context(), filter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	JSON(w, res)
+}
+
+func JSON(w http.ResponseWriter, result interface{}) {
 	response, _ := json.Marshal(result)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

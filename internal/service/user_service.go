@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	s "github.com/core-go/sql"
+	q "github.com/core-go/sql"
 	"reflect"
 	"strings"
 
+	. "go-service/internal/filter"
 	. "go-service/internal/model"
 )
 
@@ -18,19 +19,22 @@ type UserService interface {
 	Update(ctx context.Context, user *User) (int64, error)
 	Patch(ctx context.Context, user map[string]interface{}) (int64, error)
 	Delete(ctx context.Context, id string) (int64, error)
+	Search(ctx context.Context, filter UserFilter) (*Result, error)
 }
 
-type SqlUserService struct {
+type userService struct {
 	DB *sql.DB
+	BuildParam func(int) string
 }
 
 func NewUserService(db *sql.DB) UserService {
-	return &SqlUserService{DB: db}
+	buildParam := q.GetBuild(db)
+	return &userService{DB: db, BuildParam: buildParam}
 }
 
-func (m *SqlUserService) All(ctx context.Context) ([]User, error) {
+func (s *userService) All(ctx context.Context) ([]User, error) {
 	query := "select id, username, email, phone, date_of_birth from users"
-	rows, err := m.DB.QueryContext(ctx, query)
+	rows, err := s.DB.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -43,10 +47,10 @@ func (m *SqlUserService) All(ctx context.Context) ([]User, error) {
 	return users, nil
 }
 
-func (m *SqlUserService) Load(ctx context.Context, id string) (*User, error) {
+func (s *userService) Load(ctx context.Context, id string) (*User, error) {
 	var user User
 	query := "select id, username, email, phone, date_of_birth from users where id = ?"
-	err := m.DB.QueryRowContext(ctx, query, id).Scan(&user.Id, &user.Username, &user.Email, &user.Phone, &user.DateOfBirth)
+	err := s.DB.QueryRowContext(ctx, query, id).Scan(&user.Id, &user.Username, &user.Email, &user.Phone, &user.DateOfBirth)
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Compare(fmt.Sprintf(errMsg), "0 row(s) returned") == 0 {
@@ -58,9 +62,9 @@ func (m *SqlUserService) Load(ctx context.Context, id string) (*User, error) {
 	return &user, nil
 }
 
-func (m *SqlUserService) Insert(ctx context.Context, user *User) (int64, error) {
+func (s *userService) Insert(ctx context.Context, user *User) (int64, error) {
 	query := "insert into users (id, username, email, phone, date_of_birth) values (?, ?, ?, ?, ?)"
-	stmt, er0 := m.DB.Prepare(query)
+	stmt, er0 := s.DB.Prepare(query)
 	if er0 != nil {
 		return -1, nil
 	}
@@ -71,9 +75,9 @@ func (m *SqlUserService) Insert(ctx context.Context, user *User) (int64, error) 
 	return result.RowsAffected()
 }
 
-func (m *SqlUserService) Update(ctx context.Context, user *User) (int64, error) {
+func (s *userService) Update(ctx context.Context, user *User) (int64, error) {
 	query := "update users set username = ?, email = ?, phone = ?, date_of_birth = ? where id = ?"
-	stmt, er0 := m.DB.Prepare(query)
+	stmt, er0 := s.DB.Prepare(query)
 	if er0 != nil {
 		return -1, nil
 	}
@@ -84,22 +88,22 @@ func (m *SqlUserService) Update(ctx context.Context, user *User) (int64, error) 
 	return result.RowsAffected()
 }
 
-func (m *SqlUserService) Patch(ctx context.Context, user map[string]interface{}) (int64, error) {
+func (s *userService) Patch(ctx context.Context, user map[string]interface{}) (int64, error) {
 	userType := reflect.TypeOf(User{})
-	jsonColumnMap := s.MakeJsonColumnMap(userType)
-	colMap := s.JSONToColumns(user, jsonColumnMap)
-	keys, _ := s.FindPrimaryKeys(userType)
-	query, args := s.BuildToPatch("users", colMap, keys, s.BuildParam)
-	result, err := m.DB.ExecContext(ctx, query, args...)
+	jsonColumnMap := q.MakeJsonColumnMap(userType)
+	colMap := q.JSONToColumns(user, jsonColumnMap)
+	keys, _ := q.FindPrimaryKeys(userType)
+	query, args := q.BuildToPatch("users", colMap, keys, q.BuildParam)
+	result, err := s.DB.ExecContext(ctx, query, args...)
 	if err != nil {
 		return -1, err
 	}
 	return result.RowsAffected()
 }
 
-func (m *SqlUserService) Delete(ctx context.Context, id string) (int64, error) {
+func (s *userService) Delete(ctx context.Context, id string) (int64, error) {
 	query := "delete from users where id = ?"
-	stmt, er0 := m.DB.Prepare(query)
+	stmt, er0 := s.DB.Prepare(query)
 	if er0 != nil {
 		return -1, nil
 	}
@@ -112,4 +116,94 @@ func (m *SqlUserService) Delete(ctx context.Context, id string) (int64, error) {
 		return 0, er2
 	}
 	return rowAffect, nil
+}
+
+func (s *userService) Search(ctx context.Context, filter UserFilter) (*Result, error) {
+	query, params := BuildQuery(filter, s.BuildParam)
+	rows, err := s.DB.QueryContext(ctx, query, params...)
+	if err != nil {
+		return nil, err
+	}
+	var users []User
+	for rows.Next() {
+		user := User{}
+		err := rows.Scan(&user.Id, &user.Username, &user.Email, &user.Phone, &user.DateOfBirth)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	query, params = BuildCount(filter, s.BuildParam)
+	rows, err = s.DB.QueryContext(ctx, query, params...)
+	if err != nil {
+		return nil, err
+	}
+	var total int64
+	for rows.Next() {
+		err := rows.Scan(&total)
+		if err != nil {
+			return nil, err
+		}
+	}
+	result := Result{List: users, Total: total}
+	return &result, nil
+}
+
+func BuildCount(filter UserFilter, buildParam func(int) string) (string, []interface{}) {
+	query := "select count(*) from users"
+	where, params := BuildFilter(filter, buildParam)
+	if len(where) > 0 {
+		query = query + " where " + where
+	}
+	return query, params
+}
+func BuildQuery(filter UserFilter, buildParam func(int) string) (string, []interface{}) {
+	query := "select * from users"
+	where, params := BuildFilter(filter, buildParam)
+	if len(where) > 0 {
+		query = query + " where " + where
+	}
+	if filter.PageSize > 0 {
+		query = query + fmt.Sprintf(` limit %d`, filter.PageSize)
+		if filter.PageIndex > 0 {
+			pageIndex := (filter.PageIndex - 1) * filter.PageSize
+			query = query + fmt.Sprintf(` offset %d`, pageIndex)
+		}
+	}
+	return query, params
+}
+func BuildFilter(filter UserFilter, buildParam func(int) string) (string, []interface{}) {
+	var condition []string
+	var params []interface{}
+	i := 1
+
+	if len(filter.Id) > 0 {
+		params = append(params, filter.Id)
+		condition = append(condition, fmt.Sprintf(`id = %s`, buildParam(i)))
+		i++
+	}
+	if len(filter.Email) > 0 {
+		q := "%" + filter.Email + "%"
+		params = append(params, q)
+		condition = append(condition, fmt.Sprintf(`email like %s`, buildParam(i)))
+		i++
+	}
+	if len(filter.Username) > 0 {
+		q := "%" + filter.Username + "%"
+		params = append(params, q)
+		condition = append(condition, fmt.Sprintf(`username like %s`, buildParam(i)))
+		i++
+	}
+	if len(filter.Phone) > 0 {
+		q := "%" + filter.Phone + "%"
+		params = append(params, q)
+		condition = append(condition, fmt.Sprintf(`phone like %s`, buildParam(i)))
+		i++
+	}
+
+	if len(condition) > 0 {
+		return strings.Join(condition, " and "), params
+	} else {
+		return "", params
+	}
 }

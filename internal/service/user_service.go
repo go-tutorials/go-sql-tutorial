@@ -38,28 +38,35 @@ func (s *userService) All(ctx context.Context) ([]User, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	var users []User
 	for rows.Next() {
 		var user User
 		err = rows.Scan(&user.Id, &user.Username, &user.Phone, &user.Email, &user.DateOfBirth)
+		if err != nil {
+			return nil, err
+		}
 		users = append(users, user)
 	}
 	return users, nil
 }
 
 func (s *userService) Load(ctx context.Context, id string) (*User, error) {
-	var user User
-	query := "select id, username, email, phone, date_of_birth from users where id = ?"
-	err := s.DB.QueryRowContext(ctx, query, id).Scan(&user.Id, &user.Username, &user.Email, &user.Phone, &user.DateOfBirth)
+	query := "select id, username, email, phone, date_of_birth from users where id = ? limit 1"
+	rows, err := s.DB.QueryContext(ctx, query, id)
 	if err != nil {
-		errMsg := err.Error()
-		if strings.Compare(fmt.Sprintf(errMsg), "0 row(s) returned") == 0 {
-			return nil, nil
-		} else {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var user User
+		err = rows.Scan(&user.Id, &user.Username, &user.Phone, &user.Email, &user.DateOfBirth)
+		if err != nil {
 			return nil, err
 		}
+		return &user, nil
 	}
-	return &user, nil
+	return nil, nil
 }
 
 func (s *userService) Insert(ctx context.Context, user *User) (int64, error) {
@@ -68,11 +75,11 @@ func (s *userService) Insert(ctx context.Context, user *User) (int64, error) {
 	if er0 != nil {
 		return -1, nil
 	}
-	result, er1 := stmt.ExecContext(ctx, user.Id, user.Username, user.Email, user.Phone, user.DateOfBirth)
+	res, er1 := stmt.ExecContext(ctx, user.Id, user.Username, user.Email, user.Phone, user.DateOfBirth)
 	if er1 != nil {
 		return -1, nil
 	}
-	return result.RowsAffected()
+	return res.RowsAffected()
 }
 
 func (s *userService) Update(ctx context.Context, user *User) (int64, error) {
@@ -81,11 +88,11 @@ func (s *userService) Update(ctx context.Context, user *User) (int64, error) {
 	if er0 != nil {
 		return -1, nil
 	}
-	result, er1 := stmt.ExecContext(ctx, user.Username, user.Email, user.Phone, user.DateOfBirth, user.Id)
+	res, er1 := stmt.ExecContext(ctx, user.Username, user.Email, user.Phone, user.DateOfBirth, user.Id)
 	if er1 != nil {
 		return -1, er1
 	}
-	return result.RowsAffected()
+	return res.RowsAffected()
 }
 
 func (s *userService) Patch(ctx context.Context, user map[string]interface{}) (int64, error) {
@@ -94,11 +101,11 @@ func (s *userService) Patch(ctx context.Context, user map[string]interface{}) (i
 	colMap := q.JSONToColumns(user, jsonColumnMap)
 	keys, _ := q.FindPrimaryKeys(userType)
 	query, args := q.BuildToPatch("users", colMap, keys, q.BuildParam)
-	result, err := s.DB.ExecContext(ctx, query, args...)
+	res, err := s.DB.ExecContext(ctx, query, args...)
 	if err != nil {
 		return -1, err
 	}
-	return result.RowsAffected()
+	return res.RowsAffected()
 }
 
 func (s *userService) Delete(ctx context.Context, id string) (int64, error) {
@@ -107,15 +114,11 @@ func (s *userService) Delete(ctx context.Context, id string) (int64, error) {
 	if er0 != nil {
 		return -1, nil
 	}
-	result, er1 := stmt.ExecContext(ctx, id)
+	res, er1 := stmt.ExecContext(ctx, id)
 	if er1 != nil {
 		return -1, er1
 	}
-	rowAffect, er2 := result.RowsAffected()
-	if er2 != nil {
-		return 0, er2
-	}
-	return rowAffect, nil
+	return res.RowsAffected()
 }
 
 func (s *userService) Search(ctx context.Context, filter UserFilter) (*Result, error) {
@@ -145,8 +148,7 @@ func (s *userService) Search(ctx context.Context, filter UserFilter) (*Result, e
 			return nil, err
 		}
 	}
-	result := Result{List: users, Total: total}
-	return &result, nil
+	return &Result{List: users, Total: total}, nil
 }
 
 func BuildCount(filter UserFilter, buildParam func(int) string) (string, []interface{}) {

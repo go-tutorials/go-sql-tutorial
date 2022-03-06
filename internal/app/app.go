@@ -28,25 +28,25 @@ type ApplicationContext struct {
 	UserHandler   *handler.UserHandler
 }
 
-func NewApp(context context.Context, root Root) (*ApplicationContext, error) {
-	db, err := sql.OpenByConfig(root.Sql)
+func NewApp(ctx context.Context, config Config) (*ApplicationContext, error) {
+	db, err := sql.OpenByConfig(config.Sql)
 	if err != nil {
 		return nil, err
 	}
 
 	stmtCreate := "create database if not exists masterdata"
-	_, err = db.ExecContext(context, stmtCreate)
+	_, err = db.ExecContext(ctx, stmtCreate)
 	if err != nil {
 		return nil, err
 	}
 
 	stmtUseDB := "use masterdata"
-	_, err = db.ExecContext(context, stmtUseDB)
+	_, err = db.ExecContext(ctx, stmtUseDB)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = db.ExecContext(context, CreateTable)
+	_, err = db.ExecContext(ctx, CreateTable)
 	if err != nil {
 		return nil, err
 	}

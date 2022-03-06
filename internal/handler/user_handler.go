@@ -96,8 +96,6 @@ func (h *UserHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ids := []string{"id"}
-
 	var user User
 	userType := reflect.TypeOf(user)
 	_, jsonMap, _ := sv.BuildMapField(userType)
@@ -112,7 +110,7 @@ func (h *UserHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Id not match", http.StatusBadRequest)
 		return
 	}
-	json, er2 := sv.BodyToJsonMap(r, user, body, ids, jsonMap)
+	json, er2 := sv.BodyToJsonMap(r, user, body, []string{"id"}, jsonMap)
 	if er2 != nil {
 		http.Error(w, er2.Error(), http.StatusInternalServerError)
 		return

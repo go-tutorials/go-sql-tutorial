@@ -1,4 +1,4 @@
-# go-sql-rest-api
+# go-sql-tutorial
 
 ## How to run
 #### To run the application

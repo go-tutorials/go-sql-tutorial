@@ -24,12 +24,12 @@ create table if not exists users (
 )
 
 type ApplicationContext struct {
-	HealthHandler *health.Handler
-	UserHandler   *handler.UserHandler
+	Health *health.Handler
+	User   *handler.UserHandler
 }
 
-func NewApp(ctx context.Context, config Config) (*ApplicationContext, error) {
-	db, err := sql.OpenByConfig(config.Sql)
+func NewApp(ctx context.Context, cfg Config) (*ApplicationContext, error) {
+	db, err := sql.OpenByConfig(cfg.Sql)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func NewApp(ctx context.Context, config Config) (*ApplicationContext, error) {
 	healthHandler := health.NewHandler(sqlChecker)
 
 	return &ApplicationContext{
-		HealthHandler: healthHandler,
-		UserHandler:   userHandler,
+		Health: healthHandler,
+		User:   userHandler,
 	}, nil
 }

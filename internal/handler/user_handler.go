@@ -145,12 +145,12 @@ func (h *UserHandler) Search(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	res, err := h.service.Search(r.Context(), filter)
+	users, total, err := h.service.Search(r.Context(), &filter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	JSON(w, http.StatusOK, res)
+	JSON(w, http.StatusOK, &Result{List: users, Total: total})
 }
 
 func JSON(w http.ResponseWriter, code int, res interface{}) error {

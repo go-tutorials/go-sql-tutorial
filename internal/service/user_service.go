@@ -19,7 +19,7 @@ type UserService interface {
 	Update(ctx context.Context, user *User) (int64, error)
 	Patch(ctx context.Context, user map[string]interface{}) (int64, error)
 	Delete(ctx context.Context, id string) (int64, error)
-	Search(ctx context.Context, filter UserFilter) (*Result, error)
+	Search(ctx context.Context, filter *UserFilter) ([]User, int64, error)
 }
 
 type userService struct {
@@ -121,37 +121,37 @@ func (s *userService) Delete(ctx context.Context, id string) (int64, error) {
 	return res.RowsAffected()
 }
 
-func (s *userService) Search(ctx context.Context, filter UserFilter) (*Result, error) {
+func (s *userService) Search(ctx context.Context, filter *UserFilter) ([]User, int64, error) {
 	query, params := BuildQuery(filter, s.BuildParam)
 	rows, err := s.DB.QueryContext(ctx, query, params...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var users []User
 	for rows.Next() {
 		user := User{}
 		err := rows.Scan(&user.Id, &user.Username, &user.Email, &user.Phone, &user.DateOfBirth)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		users = append(users, user)
 	}
 	query, params = BuildCount(filter, s.BuildParam)
 	rows, err = s.DB.QueryContext(ctx, query, params...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var total int64
 	for rows.Next() {
 		err := rows.Scan(&total)
 		if err != nil {
-			return nil, err
+			return nil, total, err
 		}
 	}
-	return &Result{List: users, Total: total}, nil
+	return users, total, nil
 }
 
-func BuildCount(filter UserFilter, buildParam func(int) string) (string, []interface{}) {
+func BuildCount(filter *UserFilter, buildParam func(int) string) (string, []interface{}) {
 	query := "select count(*) from users"
 	where, params := BuildFilter(filter, buildParam)
 	if len(where) > 0 {
@@ -159,7 +159,7 @@ func BuildCount(filter UserFilter, buildParam func(int) string) (string, []inter
 	}
 	return query, params
 }
-func BuildQuery(filter UserFilter, buildParam func(int) string) (string, []interface{}) {
+func BuildQuery(filter *UserFilter, buildParam func(int) string) (string, []interface{}) {
 	query := "select * from users"
 	where, params := BuildFilter(filter, buildParam)
 	if len(where) > 0 {
@@ -174,7 +174,7 @@ func BuildQuery(filter UserFilter, buildParam func(int) string) (string, []inter
 	}
 	return query, params
 }
-func BuildFilter(filter UserFilter, buildParam func(int) string) (string, []interface{}) {
+func BuildFilter(filter *UserFilter, buildParam func(int) string) (string, []interface{}) {
 	var condition []string
 	var params []interface{}
 	i := 1

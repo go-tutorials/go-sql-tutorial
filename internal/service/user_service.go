@@ -137,17 +137,16 @@ func (s *userService) Search(ctx context.Context, filter *UserFilter) ([]User, i
 		users = append(users, user)
 	}
 	query, params = BuildCount(filter, s.BuildParam)
-	rows, err = s.DB.QueryContext(ctx, query, params...)
-	if err != nil {
-		return nil, 0, err
+	row := s.DB.QueryRowContext(ctx, query, params...)
+	if row.Err() != nil {
+		return users, 0, row.Err()
 	}
 	var total int64
-	for rows.Next() {
-		err := rows.Scan(&total)
-		if err != nil {
-			return nil, total, err
-		}
+	err = row.Scan(&total)
+	if err != nil || total == 0 {
+		return users, total, err
 	}
+
 	return users, total, nil
 }
 

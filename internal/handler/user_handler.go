@@ -153,6 +153,11 @@ func (h *UserHandler) Search(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, &Result{List: users, Total: total})
 }
 
+type Result struct {
+	List  []User `mapstructure:"list" json:"list,omitempty" gorm:"column:list" bson:"list,omitempty" dynamodbav:"list,omitempty" firestore:"list,omitempty"`
+	Total int64  `mapstructure:"total" json:"total,omitempty" gorm:"column:total" bson:"total,omitempty" dynamodbav:"total,omitempty" firestore:"total,omitempty"`
+}
+
 func JSON(w http.ResponseWriter, code int, res interface{}) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)

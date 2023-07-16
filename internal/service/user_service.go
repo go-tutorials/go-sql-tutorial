@@ -202,10 +202,8 @@ func BuildFilter(filter *UserFilter, buildParam func(int) string) (string, []int
 		condition = append(condition, fmt.Sprintf(`phone like %s`, buildParam(i)))
 		i++
 	}
-
 	if len(condition) > 0 {
 		return strings.Join(condition, " and "), params
-	} else {
-		return "", params
 	}
+	return "", params
 }
